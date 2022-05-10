@@ -45,6 +45,7 @@ class IngestionInfraPipeline(Stack):
 
         cdk_build = codebuild.PipelineProject(self, 'cdk_build',
             project_name=construct_id+'-cdk-build',
+            build_spec=codebuild.BuildSpec.from_source_filename('cdk-build-buildspec.yml'),
             environment=codebuild.BuildEnvironment(
                 build_image=codebuild.LinuxBuildImage.AMAZON_LINUX_2_3,
             ),
