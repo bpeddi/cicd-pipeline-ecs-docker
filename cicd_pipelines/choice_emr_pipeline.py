@@ -11,11 +11,9 @@ from aws_cdk import (
     aws_ssm as ssm,
 )
 from constructs import Construct
-import configs.globalconfig as g
 from cdk_nag import NagSuppressions
 
-
-class IngestionInfraPipeline(Stack):
+class ChoiceEmrPipeline(Stack):
 
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, env=kwargs['env'])
@@ -23,8 +21,8 @@ class IngestionInfraPipeline(Stack):
         # for k, v in kwargs.items():
         #     print(k, v)
 
-        target_account, target_region, env_name, repo_name, branch, rprefix, ssmpath, cicd_ssm_path, private_subnets, database_subnets, vpc_id, datalake_account = (kwargs[k] for k in 
-            ("target_account","target_region","env_name","repo_name","branch","rprefix","ssmpath","cicd_ssm_path","private_subnets","database_subnets","vpc_id", "datalake_account"))
+        target_account, target_region, env_name, repo_name, branch, rprefix, ssmpath, cicd_ssm_path, private_subnets, database_subnets, vpc_id, glue_service_role_name = (kwargs[k] for k in 
+            ("target_account","target_region","env_name","repo_name","branch","rprefix","ssmpath","cicd_ssm_path","private_subnets","database_subnets","vpc_id", "glue_service_role_name"))
 
         ## Retrieve params from ssm
         artifacts_bucket_name = ssm.StringParameter.from_string_parameter_name(self, 'artifacts_bucket_name', string_parameter_name=cicd_ssm_path+'artifacts_bucket_name').string_value            
@@ -36,8 +34,6 @@ class IngestionInfraPipeline(Stack):
             bucket_name=artifacts_bucket_name,
             encryption_key=artifacts_key,           
         )
-
-        glue_service_role_prefix = g.glue_service_role_prefix
 
         ## CI/CD pipeline role
 
@@ -105,7 +101,7 @@ class IngestionInfraPipeline(Stack):
                     branch=branch,
                     role=pipeline_role,
                     output=source_output,
-                    action_name="CodecommitSource"
+                    action_name="CodecommitSource",
                 )
             ]
         )
@@ -128,8 +124,8 @@ class IngestionInfraPipeline(Stack):
                         "vpc_id": codebuild.BuildEnvironmentVariable(value=vpc_id),
                         "private_subnets": codebuild.BuildEnvironmentVariable(value=private_subnets),
                         "database_subnets": codebuild.BuildEnvironmentVariable(value=database_subnets),
-                        "glue_service_role_prefix": codebuild.BuildEnvironmentVariable(value=glue_service_role_prefix),
-                        "datalake_account": codebuild.BuildEnvironmentVariable(value=datalake_account)
+                        "glue_service_role_name": codebuild.BuildEnvironmentVariable(value=glue_service_role_name),
+                        
                         }
                 ),
             ]
@@ -165,8 +161,7 @@ class IngestionInfraPipeline(Stack):
                         "vpc_id": codebuild.BuildEnvironmentVariable(value=vpc_id),
                         "private_subnets": codebuild.BuildEnvironmentVariable(value=private_subnets),
                         "database_subnets": codebuild.BuildEnvironmentVariable(value=database_subnets),
-                        "glue_service_role_prefix": codebuild.BuildEnvironmentVariable(value=glue_service_role_prefix),
-                        "datalake_account": codebuild.BuildEnvironmentVariable(value=datalake_account)
+                        "glue_service_role_name": codebuild.BuildEnvironmentVariable(value=glue_service_role_name),
                         }
                 ),
             ]

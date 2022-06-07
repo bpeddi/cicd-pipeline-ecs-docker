@@ -23,6 +23,7 @@ managed_accounts = {
             "vpc_id": "vpc-0d619b30b1b1a7d5d",
             "private_subnets": [ "subnet-0d74610f5afc452af", "subnet-0861cf1cdd11a238f" ],
             "database_subnets": [ "subnet-035594a067c6f24ca", "subnet-084601862baff95d1" ],
+            
         },
         "consumer": {
             "enabled": True,
