@@ -70,7 +70,7 @@ class ConsumerInfraPipeline(Stack):
             project_name=construct_id+'-cdk-build',
             build_spec=codebuild.BuildSpec.from_source_filename('cdk-build-buildspec.yml'),
             environment=codebuild.BuildEnvironment(
-                build_image=codebuild.LinuxBuildImage.AMAZON_LINUX_2_3,
+                build_image=codebuild.LinuxBuildImage.STANDARD_5_0,
             ),
             encryption_key=artifacts_key,
             role=pipeline_role,        
@@ -79,7 +79,7 @@ class ConsumerInfraPipeline(Stack):
             project_name=construct_id+'-cdk-deploy',
             build_spec=codebuild.BuildSpec.from_source_filename('cdk-deploy-buildspec.yml'),
             environment=codebuild.BuildEnvironment(
-                build_image=codebuild.LinuxBuildImage.AMAZON_LINUX_2_3,
+                build_image=codebuild.LinuxBuildImage.STANDARD_5_0,
             ),
             encryption_key=artifacts_key,
             role=pipeline_role,        
