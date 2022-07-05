@@ -60,7 +60,7 @@ for env_name in ["dev", "stage", "prod"]:
             vpc_id=a.managed_accounts[env_name][account_category]["vpc_id"],
             private_subnets=a.managed_accounts[env_name][account_category]["private_subnets"],
             database_subnets=a.managed_accounts[env_name][account_category]["database_subnets"],
-            
+            ingestion_account=a.managed_accounts[env_name]["ingestion"]["account"],            
             )
 
 ###

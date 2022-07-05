@@ -23,8 +23,8 @@ class DatalakeInfraPipeline(Stack):
         # for k, v in kwargs.items():
         #     print(k, v)
 
-        target_account, target_region, env_name, repo_name, branch, rprefix, ssmpath, cicd_ssm_path, private_subnets, database_subnets, vpc_id = (kwargs[k] for k in 
-            ("target_account","target_region","env_name","repo_name","branch","rprefix","ssmpath","cicd_ssm_path","private_subnets","database_subnets","vpc_id"))
+        target_account, target_region, env_name, repo_name, branch, rprefix, ssmpath, cicd_ssm_path, private_subnets, database_subnets, vpc_id, ingestion_account = (kwargs[k] for k in 
+            ("target_account","target_region","env_name","repo_name","branch","rprefix","ssmpath","cicd_ssm_path","private_subnets","database_subnets","vpc_id", "ingestion_account"))
 
         ## Retrieve params from ssm
         artifacts_bucket_name = ssm.StringParameter.from_string_parameter_name(self, 'artifacts_bucket_name', string_parameter_name=cicd_ssm_path+'artifacts_bucket_name').string_value            
@@ -129,6 +129,7 @@ class DatalakeInfraPipeline(Stack):
                         "private_subnets": codebuild.BuildEnvironmentVariable(value=private_subnets),
                         "database_subnets": codebuild.BuildEnvironmentVariable(value=database_subnets),
                         "glue_service_role_name": codebuild.BuildEnvironmentVariable(value=glue_service_role_name),
+                        "ingestion_account": codebuild.BuildEnvironmentVariable(value=ingestion_account),
                         }
                 ),
             ]
@@ -165,6 +166,7 @@ class DatalakeInfraPipeline(Stack):
                         "private_subnets": codebuild.BuildEnvironmentVariable(value=private_subnets),
                         "database_subnets": codebuild.BuildEnvironmentVariable(value=database_subnets),
                         "glue_service_role_name": codebuild.BuildEnvironmentVariable(value=glue_service_role_name),
+                        "ingestion_account": codebuild.BuildEnvironmentVariable(value=ingestion_account),
                         }
                 ),
             ]
