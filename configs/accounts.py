@@ -63,13 +63,29 @@ managed_accounts = {
     },
     "prod" : {
         "ingestion": {
-            "account": '111111111111', "region": default_region, "enabled": False
+            "enabled": True,
+            "account": '206080505010', 
+            "region": default_region, 
+            "vpc_id": "vpc-033a67ffcf11f5e1a",
+            "private_subnets": [ "subnet-02a91f663ba17d7f9", "subnet-078882a846cb8b627" ],
+            "database_subnets": [ "subnet-04159fd3458a31d39", "subnet-0b0024d0d470732ad" ],
         },
         "datalake": {
-            "account": '222222222222', "region": default_region, "enabled": False
+            "enabled": True,
+            "account": '104346584539', 
+            "region": default_region, 
+            "vpc_id": "vpc-098fc03f9fdeec2b9",
+            "private_subnets": [ "subnet-040a77f7a10a5a0d3", "subnet-02d1bc7a97c56573b" ],
+            "database_subnets": [ "subnet-0f7bfd06d02d3dcdc", "subnet-0dd2f6b6186481926" ],
+            
         },
         "consumer": {
-            "account": '333333333333', "region": default_region, "enabled": False
+            "enabled": True,
+            "account": '014179487318', 
+            "region": default_region, 
+            "vpc_id": "vpc-02abb152f33252cdc",
+            "private_subnets": [ "subnet-0a95384cbf0584e94", "subnet-0bcffa72f21be4d5e" ],
+            "database_subnets": [ "subnet-0cff3ce9ce51e8a01", "subnet-0853c56b60cc6be8d" ],
         }
     },
 }
