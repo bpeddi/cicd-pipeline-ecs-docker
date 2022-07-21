@@ -8,7 +8,7 @@ phases:
        - env
        - git clone -b ${referenceName} codecommit::${region}://${repositoryName}
        - short_commitId=$(echo ${commitId} | cut -c1-8)
-       - dt=$(date '+%d-%m-%Y-%H:%M:%S');
+       - dt=$(date '+%d-%m-%Y-%H%M%S');
        - year=$(date '+%Y')
        - month=$(date '+%m')
        - today=$(date '+%d')
