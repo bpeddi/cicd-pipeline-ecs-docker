@@ -9,6 +9,8 @@ from cicd_pipelines.ingestion_infra_pipeline import IngestionInfraPipeline
 from cicd_pipelines.datalake_infra_pipeline import DatalakeInfraPipeline
 from cicd_pipelines.consumer_infra_pipeline import ConsumerInfraPipeline
 from cicd_pipelines.choice_emr_pipeline import ChoiceEmrPipeline
+from backup_monitoring.pipeline_metrics_and_notifications import PipelineNotifications
+from backup_monitoring.codecommit_backup import CodeCommitBackup
 
 app = cdk.App()
 
@@ -114,9 +116,30 @@ for env_name in ["dev", "stage", "prod"]:
             
             )
 
+###
+# Pipeline monitoring 
+##
+
+PipelineNotifications(app, 'pipeline-metrics-and-notifications', 
+    env=cdk.Environment(account=a.devops_account["account"],region=a.devops_account["region"]),
+    cicd_ssm_path=g.cicd_ssm_path
+)
 
 
+###
+# Codecommit Backups
+###
+
+CodeCommitBackup(app, 'codecommit-backup-automation', 
+    env=cdk.Environment(account=a.devops_account["account"],region=a.devops_account["region"]),
+    cicd_ssm_path=g.cicd_ssm_path,
+    rprefix=g.rprefix
+)
 
 
 cdk.Aspects.of(app).add(AwsSolutionsChecks(verbose=True))
+cdk.Tags.of(app).add("BusinessUnit", "EDABI")
+cdk.Tags.of(app).add("ProjectID", "KK0G-22I00051-1")
+cdk.Tags.of(app).add("CostCenter", "8145")
+
 app.synth()

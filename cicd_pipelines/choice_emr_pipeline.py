@@ -9,6 +9,9 @@ from aws_cdk import (
     aws_kms as kms,
     aws_s3 as s3,
     aws_ssm as ssm,
+    aws_sns as sns,
+    aws_events_targets as events_targets,
+    aws_events as events,
 )
 from constructs import Construct
 from cdk_nag import NagSuppressions
@@ -27,13 +30,21 @@ class ChoiceEmrPipeline(Stack):
         ## Retrieve params from ssm
         artifacts_bucket_name = ssm.StringParameter.from_string_parameter_name(self, 'artifacts_bucket_name', string_parameter_name=cicd_ssm_path+'artifacts_bucket_name').string_value            
         artifacts_key_arn = ssm.StringParameter.from_string_parameter_name(self, 'artifacts_key_arn', string_parameter_name=cicd_ssm_path+'artifacts_key_arn').string_value
+        sns_notify_cicd_approvals_arn = ssm.StringParameter.from_string_parameter_name(self, 'sns_notify_cicd_approvals_arn', string_parameter_name=cicd_ssm_path+'sns_notify_cicd_approvals').string_value
+        sns_notify_pipeline_status_arn = ssm.StringParameter.from_string_parameter_name(self, 'sns_notify_pipeline_status_arn', string_parameter_name=cicd_ssm_path+'sns_notify_pipeline_status').string_value
 
+
+        # import resources
         artifacts_key = kms.Key.from_key_arn(self, 'artifacts_key', key_arn=artifacts_key_arn)
 
         artifacts_bucket = s3.Bucket.from_bucket_attributes(self, 'artifacts_bucket', 
             bucket_name=artifacts_bucket_name,
             encryption_key=artifacts_key,           
         )
+
+        sns_notify_cicd_approvals = sns.Topic.from_topic_arn(self, 'sns_notify_cicd_approvals', sns_notify_cicd_approvals_arn)
+        sns_notify_pipeline_status = sns.Topic.from_topic_arn(self, 'sns_notify_pipeline_status', sns_notify_pipeline_status_arn)    
+    
 
         ## CI/CD pipeline role
 
@@ -139,7 +150,8 @@ class ChoiceEmrPipeline(Stack):
                     action_name="RequireApprovalforProd",
                     role=pipeline_role,
                     additional_information="Review code at "+branch+" branch of repository : "+repo_name,
-                    ## tbd sns, email
+                    #external_entity_link="https://"+self.region+".console.aws.amazon.com/codesuite/codecommit/repositories/#{SourceVariables.RepositoryName}/commit/#{"+"SourceVariables.CommitId}"
+                    notification_topic=sns_notify_cicd_approvals
                 )]
             )
         
@@ -166,6 +178,10 @@ class ChoiceEmrPipeline(Stack):
                 ),
             ]
         )
+
+
+
+
 
 
         
