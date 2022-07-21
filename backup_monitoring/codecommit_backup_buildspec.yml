@@ -13,6 +13,6 @@ phases:
        - month=$(date '+%m')
        - today=$(date '+%d')
        - echo "$dt"
-       - backup_file="$dt-${referenceName}-${repositoryName}-${short_commitId}-backup.zip" 
+       - backup_file="$dt-${repositoryName}-${referenceName}-${short_commitId}-backup.zip" 
        - zip -yr  ${backup_file} ./
        - aws s3 cp ${backup_file} s3://${BACKUP_BUCKET}/${year}/${month}/${today}/
