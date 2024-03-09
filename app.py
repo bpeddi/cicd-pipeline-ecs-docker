@@ -14,7 +14,7 @@ app = cdk.App()
 ###
 
 
-for env_name in ["dev",  "prod"]:
+for env_name in ["baladev",  "prod"]:
     if (a.managed_accounts[env_name]["enabled"]):
         
         DockerInfraPipeline(app, env_name+"-docker-infra-pipeline",

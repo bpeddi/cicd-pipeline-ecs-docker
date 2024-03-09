@@ -53,6 +53,10 @@ class DockerInfraPipeline(Stack):
                                      iam.ServicePrincipal("codebuild.amazonaws.com"),
                                      iam.ServicePrincipal("cloudformation.amazonaws.com")
                                  ),
+                                managed_policies=[
+                                    iam.ManagedPolicy.from_aws_managed_policy_name("AWSCodeBuildAdminAccess"),
+                                    iam.ManagedPolicy.from_aws_managed_policy_name("AmazonEC2ContainerRegistryPowerUser")
+                                ],
                                  role_name=construct_id + '-role'
                                  )
 
@@ -71,7 +75,9 @@ class DockerInfraPipeline(Stack):
             "Container",
             container_name="myweb",
             image=ecs.ContainerImage.from_ecr_repository(image_repo),
-            port_mappings=[{"containerPort": 80}]
+            port_mappings=[{"containerPort": 80}],
+            memory_limit_mib=512,
+            cpu=256,
         )
 
         
@@ -91,7 +97,7 @@ class DockerInfraPipeline(Stack):
         # https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html
         target_group_blue = elb.ApplicationTargetGroup(
             self, "BlueTargetGroup",
-            target_group_name="alb-blue-tg",
+            # target_group_name="alb-blue-tg",
             target_type=elb.TargetType.IP,
             port=80,
             vpc=cluster_vpc
@@ -100,7 +106,7 @@ class DockerInfraPipeline(Stack):
         # Creates a new green Target Group
         target_group_green = elb.ApplicationTargetGroup(
             self, "GreenTargetGroup",
-            target_group_name="alb-green-tg",
+            # target_group_name="alb-green-tg",
             target_type=elb.TargetType.IP,
             port=80,
             vpc=cluster_vpc
@@ -127,6 +133,21 @@ class DockerInfraPipeline(Stack):
             security_group=albSg
         )
 
+        # Specify the subnet ID of the existing subnet
+        existing_subnet_id = "subnet-465ebb19"
+        existing_sec_id         = "security_groups"
+        # Retrieve the existing VPC and specific subnet by ID
+        existing_subnet = ec2.Vpc.from_lookup(self, "ExistingVpc",
+            vpc_name=cluster_vpc,
+            subnet_ids=[existing_subnet_id]
+        )
+
+        existing_subnet = ec2.Vpc.from_lookup(self, "Existingsec",
+            vpc_name=cluster_vpc,
+            subnet_ids=[existing_subnet_id]
+        )
+
+
         # Adds a listener on port 80 to the ALB
         alb_listener = public_alb.add_listener(
             "AlbListener80",
@@ -136,24 +157,28 @@ class DockerInfraPipeline(Stack):
         )
 
         # Creates an ECS Fargate service
-        # fargate_service = ecs.FargateService(
-        #     self, "FargateService",
-        #     desired_count=1,
-        #     service_name="fargate-frontend-service",
-        #     task_definition=fargate_task_def,
-        #     cluster=ecs.Cluster(
-        #         self, "EcsCluster",
-        #         enable_fargate_capacity_providers=True,
-        #         vpc=cluster_vpc
-        #     ),
-        #     # Sets CodeDeploy as the deployment controller
-        #     deployment_controller=ecs.DeploymentController(
-        #         type=ecs.DeploymentControllerType.CODE_DEPLOY
-        #     ),
-        # )
+        # Creates an ECS Fargate service
+        fargate_service = ecs.FargateService(
+            self, "FargateService",
+            desired_count=1,
+            service_name="fargate-frontend-service",
+            task_definition=fargate_task_def,
+            cluster=ecs.Cluster(
+                self, "EcsCluster",
+                enable_fargate_capacity_providers=True,
+                vpc=cluster_vpc
+            ),
+            # Sets CodeDeploy as the deployment controller
+            deployment_controller=ecs.DeploymentController(
+                type=ecs.DeploymentControllerType.CODE_DEPLOY
+            ),
+            assign_public_ip=True,
+            vpc_subnets=ec2.SubnetSelection(subnet_ids=["subnet-465ebb19"]),
+            security_groups=[ec2.SecurityGroup.from_security_group_id(self, "ExistingSecurityGroup", "sg-5769947c")]
 
+        )
         # # Adds the ECS Fargate service to the ALB target group
-        # fargate_service.attach_to_application_target_group(target_group_blue)
+        fargate_service.attach_to_application_target_group(target_group_blue)
 
 
         # Creates the source stage for CodePipeline
@@ -170,21 +195,19 @@ class DockerInfraPipeline(Stack):
         # )
 
 
-
-        build_image = codebuild.PipelineProject(self, 'cdk_build',
+        repository = codecommit.Repository.from_repository_name(self, "MyCodeCommitRepo",
+            repository_name="balaapp"
+        )
+        build_image = codebuild.Project(self, 'cdk_build',
                                               project_name=construct_id + '-cdk-build',
-                                              build_spec=codebuild.BuildSpec.from_source_filename('buildspec.yml'),
+                                              build_spec=codebuild.BuildSpec.from_source_filename('buildspec.yaml'),
                                               environment=codebuild.BuildEnvironment(
                                                   build_image=codebuild.LinuxBuildImage.STANDARD_5_0,
                                               ),
                                               role=pipeline_role,
-                                            #   source=codebuild.Source.git_hub(
-                                            #       owner='bpeddi',
-                                            #       repo='myapp',
-                                            #       branch_or_ref='main',
-                                            #       webhook=True,
-                                            #     #   oauth_token=SecretValue.secrets_manager('OAuthSecret'),
-                                            #   ),
+                                            source=codebuild.Source.code_commit(
+                                            repository=repository
+                                            ),
                                               environment_variables={
                                                         "AWS_ACCOUNT_ID": codebuild.BuildEnvironmentVariable(value=target_account or ""),
                                                         "REGION": codebuild.BuildEnvironmentVariable(value=target_region or ""),
