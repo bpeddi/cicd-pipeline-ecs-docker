@@ -30,12 +30,33 @@ class DockerInfraPipeline(Stack):
         env_name = kwargs['env_name']
         repo_name = kwargs['repo_name']
         branch = kwargs['branch']
-        cluster_vpc = kwargs['vpccluster_vpc_id']
+        # cluster_vpc = kwargs['vpccluster_vpc_id']
         artifacts_bucket = kwargs['artifacts_bucket']
 
       
-        
+        # ==================================================
+        # ==================== VPC =========================
+        # ==================================================
+        public_subnet = ec2.SubnetConfiguration(
+            name="Public", subnet_type=ec2.SubnetType.PUBLIC, cidr_mask=28
+        )
+        private_subnet = ec2.SubnetConfiguration(
+            name="Private", subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS, cidr_mask=28
+        )
 
+
+        cluster_vpc = ec2.Vpc(
+            scope=self,
+            id="VPC",
+            ip_addresses=ec2.IpAddresses.cidr("10.0.0.0/24"),
+            max_azs=2,
+            nat_gateway_provider=ec2.NatProvider.gateway(),
+            nat_gateways=1,
+            subnet_configuration=[public_subnet, private_subnet],
+        )
+        cluster_vpc.add_gateway_endpoint(
+            "S3Endpoint", service=ec2.GatewayVpcEndpointAwsService.S3
+        )
 
 
         # artifacts_bucket_name = f'{construct_id}-devops-artifacts-bucket'
@@ -57,10 +78,20 @@ class DockerInfraPipeline(Stack):
                                     iam.ManagedPolicy.from_aws_managed_policy_name("AWSCodeBuildAdminAccess"),
                                     iam.ManagedPolicy.from_aws_managed_policy_name("AmazonEC2ContainerRegistryPowerUser")
                                 ],
+                                
                                  role_name=construct_id + '-role'
                                  )
-
+        
+        # 
         # Adding permissions to the pipeline role
+        pipeline_role.add_managed_policy(
+            iam.ManagedPolicy.from_aws_managed_policy_name("AmazonS3FullAccess")
+        )
+        pipeline_role.add_managed_policy(
+            iam.ManagedPolicy.from_aws_managed_policy_name("AmazonECS_FullAccess")
+        )
+
+
         pipeline_role.add_to_policy(iam.PolicyStatement(
             effect=iam.Effect.ALLOW,
             actions=['sts:AssumeRole', 'codestar-connections:UseConnection'],
@@ -80,17 +111,6 @@ class DockerInfraPipeline(Stack):
             cpu=256,
         )
 
-        
-        cluster_vpc = ec2.Vpc.from_lookup(self, "ExistingVpc", vpc_id=cluster_vpc)
-     
-        # Creates VPC for the ECS Cluster
-        # cluster_vpc = ec2.Vpc(
-        #     self, "ClusterVpc",
-        #     ip_addresses=ec2.IpAddresses.cidr(cidr_block="10.75.0.0/16")
-        # )
-
-        # Deploys the cluster VPC after the initial image build triggers
-        # cluster_vpc.node.add_dependency(trigger_lambda)
 
         # Creates a new blue Target Group that routes traffic from the public Application Load Balancer (ALB) to the
         # registered targets within the Target Group e.g. (EC2 instances, IP addresses, Lambda functions)
@@ -125,6 +145,9 @@ class DockerInfraPipeline(Stack):
             remote_rule=False
         )
 
+        # albSg.add_ingress_rule(
+        #     peer=ec2.Peer.ipv4("10.0.0.0/24"), connection=ec2.Port.all_traffic()
+        # )
         # Creates a public ALB
         public_alb = elb.ApplicationLoadBalancer(
             self, "PublicAlb",
@@ -132,21 +155,6 @@ class DockerInfraPipeline(Stack):
             internet_facing=True,
             security_group=albSg
         )
-
-        # Specify the subnet ID of the existing subnet
-        existing_subnet_id = "subnet-465ebb19"
-        existing_sec_id         = "security_groups"
-        # Retrieve the existing VPC and specific subnet by ID
-        existing_subnet = ec2.Vpc.from_lookup(self, "ExistingVpc",
-            vpc_name=cluster_vpc,
-            subnet_ids=[existing_subnet_id]
-        )
-
-        existing_subnet = ec2.Vpc.from_lookup(self, "Existingsec",
-            vpc_name=cluster_vpc,
-            subnet_ids=[existing_subnet_id]
-        )
-
 
         # Adds a listener on port 80 to the ALB
         alb_listener = public_alb.add_listener(
@@ -156,8 +164,6 @@ class DockerInfraPipeline(Stack):
             default_target_groups=[target_group_blue]
         )
 
-        # Creates an ECS Fargate service
-        # Creates an ECS Fargate service
         fargate_service = ecs.FargateService(
             self, "FargateService",
             desired_count=1,
@@ -173,8 +179,10 @@ class DockerInfraPipeline(Stack):
                 type=ecs.DeploymentControllerType.CODE_DEPLOY
             ),
             assign_public_ip=True,
-            vpc_subnets=ec2.SubnetSelection(subnet_ids=["subnet-465ebb19"]),
-            security_groups=[ec2.SecurityGroup.from_security_group_id(self, "ExistingSecurityGroup", "sg-5769947c")]
+            vpc_subnets=ec2.SubnetSelection(
+                subnet_type=ec2.SubnetType.PUBLIC
+            ),
+            security_groups=[albSg]
 
         )
         # # Adds the ECS Fargate service to the ALB target group
@@ -224,101 +232,74 @@ class DockerInfraPipeline(Stack):
         
         # pipeline_role.grant(existing_bucket)
         existing_bucket.grant_read_write(build_image)
-        # image_repo.grant_pull_push(build_image)
+        image_repo.grant_pull_push(build_image)
     
-        # # Creating CodePipeline add source stage 
-        # pipeline = codepipeline.Pipeline(self, 'pipeline',
-        #                                  pipeline_name=construct_id,
-        #                                  role=pipeline_role,
-        #                                  artifact_bucket=artifacts_bucket,
-        #                                  cross_account_keys=True,
-        #                                  )
+        # Creating CodePipeline add source stage 
+        pipeline = codepipeline.Pipeline(self, 'pipeline',
+                                         pipeline_name=construct_id,
+                                         role=pipeline_role,
+                                         artifact_bucket=existing_bucket,
+                                         cross_account_keys=True,
+                                         )
         
-        # # Creates new pipeline artifacts
-        # source_artifact = codepipeline.Artifact("SourceArtifact")
-        # build_artifact = codepipeline.Artifact("BuildArtifact")
+        # Creates new pipeline artifacts
+        source_artifact = codepipeline.Artifact("SourceArtifact")
+        build_artifact = codepipeline.Artifact("BuildArtifact")
 
-        # source_stage = pipeline.add_stage(stage_name='Source')
-        # source_output = codepipeline.Artifact()
-        # source_action = pipelineactions.GitHubSourceAction(
-        #     action_name='GitHub_Source',
-        #     output=source_artifact,
-        #     oauth_token=SecretValue.secrets_manager('OAuthSecret'),
-        #     owner='bpeddi',
-        #     repo='mymlproject',
-        #     branch='main',
-        #     trigger=pipelineactions.GitHubTrigger.POLL
-        # )
-        # source_stage.add_action(source_action)
+        source_stage = pipeline.add_stage(stage_name='Source')
+     
 
-        # # pipeline.add_stage(
-        # #     stage_name='Build',
-        # #     actions=[
-        # #         pipelineactions.CodeBuildAction(
-        # #             input=source_output,
-        # #             project=cdk_build,
-        # #             role=pipeline_role,
-        # #             action_name='cdk_build',
-        # #             outputs=[codepipeline.Artifact(artifact_name='BuildOutput')],
-        # #             environment_variables={
-        # #                 "target_account": codebuild.BuildEnvironmentVariable(value=target_account),
-        # #                 "target_region": codebuild.BuildEnvironmentVariable(value=target_region),
-        # #                 "env_name": codebuild.BuildEnvironmentVariable(value=env_name),
-        # #                 "rprefix": codebuild.BuildEnvironmentVariable(value=rprefix),
-        # #                 "vpc_id": codebuild.BuildEnvironmentVariable(value=vpc_id),
-        # #                 "private_subnets": codebuild.BuildEnvironmentVariable(value=private_subnets),
-        # #             }
-        # #         ),
-        # #     ]
-        # # )
+        source_action= pipelineactions.CodeCommitSourceAction(
+            action_name='CodeCommit_Source',
+            branch='main',
+            output=source_artifact,
+            repository=repository,
+            # trigger=pipelineactions.CodeCommitTrigger.POLL,
+            )
+        source_stage.add_action(source_action)
 
-        # # Creates the build stage for CodePipeline
-        # pipeline.add_stage(
-        #     stage_name="Build",
-        #     actions=[
-        #         pipelineactions.CodeBuildAction(
-        #             action_name="DockerBuildPush",
-        #             input=codepipeline.Artifact(),
-        #             project=build_image,
-        #             outputs=[build_artifact],
-        #             role=pipeline_role,
-        #         )
-        #     ]
-        # )
 
-        # # Creates a new CodeDeploy Deployment Group
-        # deployment_group = codedeploy.EcsDeploymentGroup(
-        #     self, "CodeDeployGroup",
-        #     service=fargate_service,
-        #     # Configurations for CodeDeploy Blue/Green deployments
-        #     blue_green_deployment_config=codedeploy.EcsBlueGreenDeploymentConfig(
-        #         listener=alb_listener,
-        #         blue_target_group=target_group_blue,
-        #         green_target_group=target_group_green
-        #     )
-        # )
+        # Creates the build stage for CodePipeline
+        pipeline.add_stage(
+            stage_name="Build",
+            actions=[
+                pipelineactions.CodeBuildAction(
+                    action_name="DockerBuildPush",
+                    input=source_artifact,
+                    project=build_image,
+                    role=pipeline_role,
+                    outputs=[build_artifact]
+                )
+            ]
+        )
 
-        # # Creates the deploy stage for CodePipeline
-        # deploy_stage = pipeline.add_stage(
-        #     stage_name="Deploy",
-        #     actions=[
-        #         pipelineactions.CodeDeployEcsDeployAction(
-        #             action_name="EcsFargateDeploy",
-        #             app_spec_template_input=build_artifact,
-        #             task_definition_template_input=build_artifact,
-        #             deployment_group=deployment_group
-        #         )
-        #     ]
-        # )
 
-        # # Creates an AWS CodePipeline with source, build, and deploy stages
-        # # pipeline.Pipeline(
-        # #     self, "BuildDeployPipeline",
-        # #     pipeline_name="ImageBuildDeployPipeline",
-        # #     stages=[source_stage, build_stage, deploy_stage]
-        # # )
+        # Creates a new CodeDeploy Deployment Group
+        deployment_group = codedeploy.EcsDeploymentGroup(
+            self, "CodeDeployGroup",
+            service=fargate_service,
+            # Configurations for CodeDeploy Blue/Green deployments
+            blue_green_deployment_config=codedeploy.EcsBlueGreenDeploymentConfig(
+                listener=alb_listener,
+                blue_target_group=target_group_blue,
+                green_target_group=target_group_green
+            )
+        )
 
-        # Outputs the ALB public endpoint
+        # Creates the deploy stage for CodePipeline
+        deploy_stage = pipeline.add_stage(
+            stage_name="Deploy",
+            actions=[
+                pipelineactions.CodeDeployEcsDeployAction(
+                    action_name="EcsFargateDeploy",
+                    app_spec_template_input=build_artifact,
+                    task_definition_template_input=build_artifact,
+                    deployment_group=deployment_group
+                )
+            ]
+        )
+
+
         CfnOutput(
             self, "PublicAlbEndpoint",
             value=f"http://{public_alb.load_balancer_dns_name}"
