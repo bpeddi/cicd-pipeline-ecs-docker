@@ -21,7 +21,7 @@ for env_name in ["baladev",  "prod"]:
             env=cdk.Environment(account=a.devops_account["account"],region=a.devops_account["region"]),
             target_account=a.managed_accounts[env_name]["account"],
             target_region=a.managed_accounts[env_name]["region"],
-            repo_name="mymlproject",
+            repo_name="ml_model_inference_streamlit_app",
             branch='main',
             rprefix=g.rprefix,
             env_name=env_name,
