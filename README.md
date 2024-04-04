@@ -1,6 +1,8 @@
 
 # Welcome to your CDK Python project!
 
+![Architecture](aws_infra.PNG)
+
 This is a blank project for CDK development with Python.
 
 The `cdk.json` file tells the CDK Toolkit how to execute your app.
